@@ -1,0 +1,25 @@
+tests:
+  test_1:  # Test with minimum required parameters
+    parameters:
+      estado: "SP"
+      cidade: "São Paulo"
+      tipo: "CAPS"
+  test_2:  # Test with required parameters and formato
+    parameters:
+      estado: "SP"
+      cidade: "São Paulo"
+      formato: "presencial"
+      tipo: "Hospital"
+  test_3:  # Test with required parameters and pagamento
+    parameters:
+      estado: "CE"
+      cidade: "Fortaleza"
+      pagamento: "gratuito"
+      tipo: "UPA"
+  test_4:  # Test with all parameters
+    parameters:
+      estado: "CE"
+      cidade: "Fortaleza"
+      formato: "presencial"
+      pagamento: "gratuito"
+      tipo: "CAPS,Hospital,UPA" 
