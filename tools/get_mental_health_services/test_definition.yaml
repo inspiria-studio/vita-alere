@@ -2,20 +2,19 @@ tests:
   test_1:  # Test with minimum required parameters
     parameters:
       estado: "SP"
-      cidade: "São Paulo"
-      tipo: "CAPS"
+      cidade: "sorocaba"
+      tipo: "serviço escola"
   test_2:  # Test with required parameters and formato
     parameters:
-      estado: "SP"
-      cidade: "São Paulo"
-      formato: "presencial"
+      estado: "MG"
+      cidade: "Entre Rios de Minas"
       tipo: "Hospital"
   test_3:  # Test with required parameters and pagamento
     parameters:
-      estado: "CE"
-      cidade: "Fortaleza"
+      estado: "AL"
+      cidade: "Maceió"
       pagamento: "gratuito"
-      tipo: "UPA"
+      tipo: "CAPS"
   test_4:  # Test with all parameters
     parameters:
       estado: "CE"
@@ -23,3 +22,8 @@ tests:
       formato: "presencial"
       pagamento: "gratuito"
       tipo: "CAPS,Hospital,UPA" 
+  test_5:  # Test with multiple cities (comma-separated)
+    parameters:
+      estado: "SP"
+      cidade: "sorocaba, votorantim, ipero"
+      tipo: "CAPS"

@@ -1,0 +1,22 @@
+tests:
+  test_1:  # Busca com CEP válido
+    parameters:
+      cep: "35490-000"
+    expected_output:
+      status: "success"
+      cidades_proximas:
+        - nome: "Maceió"
+
+  test_2:  # CEP inválido
+    parameters:
+      cep: "60351090"
+    expected_output: "Não foi possível obter coordenadas a partir do CEP."
+
+  test_3:  # Nenhum CEP fornecido
+    parameters: {}
+    expected_output: "CEP não fornecido."
+
+  test_4:  # Overpass fora do ar (você pode simular retornando 504 em mock)
+    parameters:
+      cep: "57020380"
+    expected_output: "Erro: tempo limite da Overpass API expirado (HTTP 504). A consulta pode estar pesada demais."

@@ -7,65 +7,73 @@ from urllib.parse import urlencode
 
 
 class GetMentalHealthServices(Tool):
-    BASE_URL = "https://mapasaudemental.com.br/wp-json/latlngplugin/v1/latlng-results"
+    BASE_URL = "https://mapasaudemental.com.br/wp-json/latlng/v1/latlng-results"
     HEADERS = {
         'Accept': '*/*',
         'User-Agent': 'Vita Alere Assistant/1.0',
         'Content-Type': 'application/json'
     }
     
+    # Campos conforme a API atual (minúsculos) + coordenadas
     FIELDS_TO_KEEP = [
-        'Id', 'Tipo', 'Pagamento', 'Formato', 'Nome', 'Endereco', 'Numero',
-        'Complemento', 'Bairro', 'Cidade', 'Cep', 'Observacao'
+        'id', 'tipo', 'pagamento', 'formato', 'name', 'endereco', 'numero',
+        'complemento', 'bairro', 'cidade', 'estado', 'cep', 'observacao',
+        'lat', 'long'
     ]
 
     def execute(self, context: Context) -> TextResponse:
+        
+        urn = context.contact.get("urn","")
+        
         # Get required parameters from context
         estado = context.parameters.get("estado")
         if not estado:
-            raise ValueError("O parâmetro 'estado' é obrigatório")
+            return TextResponse(data={"status": "error", "message": "O parâmetro 'estado' é obrigatório"})
             
-        cidade = context.parameters.get("cidade")
-        if not cidade:
-            raise ValueError("O parâmetro 'cidade' é obrigatório")
+        cidade_param = context.parameters.get("cidade")
+        if not cidade_param:
+            return TextResponse(data={"status": "error", "message": "O parâmetro 'cidade' é obrigatório"})
+
+        # Permite múltiplas cidades separadas por vírgula
+        cidades = [c.strip() for c in str(cidade_param).split(',') if str(c).strip()]
+        if not cidades:
+            return TextResponse(data={"status": "error", "message": "O parâmetro 'cidade' não pode ser vazio"})
 
         # Get optional parameters
         formato = context.parameters.get("formato", "")
         pagamento = context.parameters.get("pagamento", "")
         tipo = context.parameters.get("tipo", "")
+        
+        # Debug opcional: use 'cidades' (lista) em vez de 'cidade' fora do loop
+        # print(estado, cidades, formato, pagamento, tipo)
+        
 
         try:
-            # Get services from API
-            response = self.get_mental_health_services(
-                estado=estado,
-                cidade=cidade,
-                formato=formato,
-                pagamento=pagamento,
-                tipo=tipo
-            )
-            
-            if not response:
-                return TextResponse(data={
-                    "status": "error",
-                    "message": "Nenhum serviço encontrado com os parâmetros fornecidos"
-                })
+            # Consulta cada cidade e agrega resultados
+            all_locations = []
+            raw_results = []
+            for cidade in cidades:
+                response = self.get_mental_health_services(
+                    estado=estado,
+                    cidade=cidade,
+                    formato=formato,
+                    pagamento=pagamento,
+                    tipo=tipo
+                )
 
-            # If it's an error response, return it as is
-            if isinstance(response, dict) and response.get('status') == 'error':
-                return TextResponse(data=response)
+                if not response:
+                    continue
 
-            # If we have locations in the response, filter them
-            if isinstance(response, dict) and 'locations' in response:
-                filtered_locations = [self.filter_service_fields(service) for service in response['locations']]
-                return TextResponse(data={"status": "success", "locations": filtered_locations})
-            
-            # If it's a list, filter each service
-            if isinstance(response, list):
-                filtered_services = [self.filter_service_fields(service) for service in response]
-                return TextResponse(data={"status": "success", "locations": filtered_services})
-            
-            # If none of the above, return the original response
-            return TextResponse(data=response)
+                if isinstance(response, dict) and isinstance(response.get('locations'), list):
+                    all_locations.extend(response.get('locations', []))
+                else:
+                    raw_results.append({"cidade": cidade, "response": response})
+
+            if all_locations:
+                return TextResponse(data={"status": "success", "locations": all_locations})
+            if raw_results:
+                return TextResponse(data={"status": "multi", "results": raw_results})
+            return TextResponse(data={"status": "false", "locations": [], "message": "Nenhum serviço encontrado"})                    
             
         except Exception as e:
             return TextResponse(data={
@@ -74,8 +82,18 @@ class GetMentalHealthServices(Tool):
             })
 
     def filter_service_fields(self, service: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter only the required fields from a service entry."""
-        return {field: service.get(field, '') for field in self.FIELDS_TO_KEEP if field in service}
+        """Filter only required fields with case-insensitive key matching."""
+        try:
+            if not isinstance(service, dict):
+                return {}
+            # Mapa case-insensitive das chaves retornadas pela API
+            lower_key_to_value = {str(k).lower(): v for k, v in service.items()}
+            filtered: Dict[str, Any] = {}
+            for field in self.FIELDS_TO_KEEP:
+                filtered[field] = lower_key_to_value.get(field, '')
+            return filtered
+        except Exception:
+            return {}
 
     def get_mental_health_services(
         self,
@@ -83,19 +101,30 @@ class GetMentalHealthServices(Tool):
         cidade: str,
         formato: Optional[str] = None,
         pagamento: Optional[str] = None,
-        tipo: Optional[str] = None
+        tipo: Optional[str] = None,
+        
     ) -> Dict[str, Any]:
         # Build query parameters
         params = {
-            'estado': estado.upper(),
-            'cidade': cidade.title()
+            'estado': estado,
+            'cidade': cidade
         }
         if formato:
-            params['formato'] = formato.lower()
+            params['formato'] = str(formato).lower()
         if pagamento:
-            params['pagamento'] = pagamento.lower()
+            params['pagamento'] = str(pagamento).lower()
         if tipo:
-            params['tipo'] = tipo.upper()
+            try:
+                # Processa lista separada por vírgula mantendo o formato original
+                processed_tipo = ",".join([
+                    part.strip()
+                    for part in str(tipo).split(",") if part.strip()
+                ])
+                if processed_tipo:
+                    params['tipo'] = processed_tipo
+            except Exception:
+                # Se houver erro no processamento, usar o valor original
+                params['tipo'] = str(tipo)
 
         # Build URL with parameters
         url = f"{self.BASE_URL}"
@@ -105,11 +134,87 @@ class GetMentalHealthServices(Tool):
         try:
             # Make request with headers
             response = requests.get(url, headers=self.HEADERS, timeout=10)
-            response.raise_for_status()
-            return response.json()
+
+            if response.status_code >= 400:
+                # Tenta extrair payload de erro do WP REST
+                try:
+                    err = response.json()
+                except ValueError:
+                    err = None
+                if isinstance(err, dict) and err.get('code') and err.get('message'):
+                    return {
+                        "status": "error",
+                        "http_status": response.status_code,
+                        "code": err.get('code'),
+                        "message": err.get('message'),
+                        "url": url,
+                    }
+                return {
+                    "status": "error",
+                    "http_status": response.status_code,
+                    "message": f"Erro HTTP {response.status_code} ao consultar a API",
+                    "url": url,
+                }
+            try:
+                api_response = response.json()
+                if 'locations' in api_response:
+                    filtered_locations = []
+                    for location in api_response['locations']:
+                        filtered_location = {
+                            'name': location.get('name', ''),
+                            'lat': location.get('lat', ''),
+                            'long': location.get('long', ''),
+                            'cidade': cidade,
+                            'estado': estado,
+                            'endereco': location.get('endereco', ''),
+                            'tipo': tipo,
+                            'pagamento': pagamento,
+                            'formato': formato
+                        }
+                        filtered_locations.append(filtered_location)
+                    
+                    return {
+                        "status": "success",
+                        "locations": filtered_locations
+                    }
+                else:
+                    return api_response
+            except ValueError:
+                return {
+                    "status": "error",
+                    "message": "Resposta inválida da API (não é JSON válido)",
+                    "url": url,
+                }
+        
         except requests.exceptions.Timeout:
-            raise ValueError("Tempo limite excedido ao consultar a API")
+            return {
+                "status": "error",
+                "message": "Tempo limite excedido ao consultar a API",
+                "url": url,
+            }
         except requests.exceptions.RequestException as e:
-            if response.status_code == 404:
-                return {"status": "error", "message": "Nenhum serviço encontrado"}
-            raise ValueError(f"Erro na requisição: {str(e)}") 
+            resp = getattr(e, 'response', None)
+            if resp is not None:
+                try:
+                    err = resp.json()
+                except ValueError:
+                    err = None
+                if isinstance(err, dict) and err.get('code') and err.get('message'):
+                    return {
+                        "status": "error",
+                        "http_status": resp.status_code,
+                        "code": err.get('code'),
+                        "message": err.get('message'),
+                        "url": url,
+                    }
+                return {
+                    "status": "error",
+                    "http_status": resp.status_code if hasattr(resp, 'status_code') else None,
+                    "message": f"Erro ao consultar a API: {str(e)}",
+                    "url": url,
+                }
+            return {
+                "status": "error",
+                "message": f"Erro na requisição: {str(e)}",
+                "url": url,
+            } 

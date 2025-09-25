@@ -1,0 +1,23 @@
+tests:
+  test_1:  # Lista de estabelecimentos vazia
+    parameters:
+      cep: "01311000"
+      establishments: []
+    expected_output: "Lista de estabelecimentos e obrigatoria."
+
+  test_2:  # Estabelecimentos no formato string válido (sem API key)
+    parameters:
+      cep: "35490-000"
+      establishments: "[{name=Hospital Sao Paulo, lat=-21.18995095600618, lng=-43.97807664210075}]"
+    expected_output: "Chave da API do Google Maps nao fornecida."
+
+  test_3:  # Sem CEP fornecido
+    parameters:
+      establishments: "[{name=Hospital Teste, lat=-23.5475, lng=-46.6311}]"
+    expected_output: "CEP não fornecido."
+
+  test_4:  # Estabelecimentos no tipo errado (nao-lista e nao-string JSON-like)
+    parameters:
+      cep: "01311000"
+      establishments: 123
+    expected_output: "Estabelecimentos deve ser uma lista."
