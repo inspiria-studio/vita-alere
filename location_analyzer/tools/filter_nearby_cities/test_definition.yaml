@@ -1,0 +1,8 @@
+tests:
+  test_1:  # Busca com CEP válido
+    parameters:
+      cep: "35490-000"
+    expected_output:
+      status: "success"
+      cidades_proximas:
+        - nome: "Maceió"

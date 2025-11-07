@@ -3,7 +3,7 @@ tests:
     parameters:
       estado: "SP"
       cidade: "sorocaba"
-      tipo: "serviço escola"
+      tipo: "CAPS"
   test_2:  # Test with required parameters and formato
     parameters:
       estado: "MG"

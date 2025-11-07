@@ -16,23 +16,56 @@ class GetMentalHealthServices(Tool):
     
     # Campos conforme a API atual (minúsculos) + coordenadas
     FIELDS_TO_KEEP = [
-        'id', 'tipo', 'pagamento', 'formato', 'name', 'endereco', 'numero',
-        'complemento', 'bairro', 'cidade', 'estado', 'cep', 'observacao',
-        'lat', 'long'
+        'name', 'lat', 'long', 'cidade', 'estado', 'endereco', 'tipo',
+        'pagamento', 'formato', 'telefone1', 'telefone2',
+        'whatsapp', 'sigla', 'numero', 'complemento', 'bairro',
+        'site', 'instagram', 'facebook', 'email', 'youtube'
     ]
 
     def execute(self, context: Context) -> TextResponse:
         
-        urn = context.contact.get("urn","")
+        #urn = context.contact.get("urn","")
         
-        # Get required parameters from context
+        # Obtém parâmetros do contexto (estado/cidade podem ser derivados de CEP)
         estado = context.parameters.get("estado")
-        if not estado:
-            return TextResponse(data={"status": "error", "message": "O parâmetro 'estado' é obrigatório"})
-            
         cidade_param = context.parameters.get("cidade")
+        cep_param = context.parameters.get("cep")
+
+        # Se CEP for informado, usa ViaCEP para preencher cidade e estado
+        if cep_param and (not estado or not cidade_param):
+            try:
+                cep_digits = "".join([c for c in str(cep_param) if c.isdigit()])
+
+                viacep_url = f"https://viacep.com.br/ws/{cep_digits}/json/"
+                viacep_resp = requests.get(viacep_url, timeout=8)
+                if viacep_resp.status_code >= 400:
+                    return TextResponse(data={
+                        "status": "error",
+                        "message": "Não foi possível consultar o ViaCEP no momento.",
+                    })
+                viacep_json = viacep_resp.json()
+                if viacep_json.get("erro"):
+                    return TextResponse(data={
+                        "status": "error",
+                        "message": "CEP não encontrado no ViaCEP. Verifique e tente novamente."
+                    })
+                # Preenche apenas o que estiver faltando
+                if not cidade_param:
+                    cidade_param = viacep_json.get("localidade")
+                if not estado:
+                    estado = viacep_json.get("uf")
+            except Exception:
+                return TextResponse(data={
+                    "status": "error",
+                    "message": "Erro ao consultar o ViaCEP. Tente novamente mais tarde."
+                })
+
+        # Valida obrigatórios após possível preenchimento por CEP
+        if not estado:
+            return TextResponse(data={"status": "error", "message": "O parâmetro 'estado' é obrigatório (ou informe um CEP válido)"})
+            
         if not cidade_param:
-            return TextResponse(data={"status": "error", "message": "O parâmetro 'cidade' é obrigatório"})
+            return TextResponse(data={"status": "error", "message": "O parâmetro 'cidade' é obrigatório (ou informe um CEP válido)"})
 
         # Permite múltiplas cidades separadas por vírgula
         cidades = [c.strip() for c in str(cidade_param).split(',') if str(c).strip()]
@@ -41,7 +74,6 @@ class GetMentalHealthServices(Tool):
 
         # Get optional parameters
         formato = context.parameters.get("formato", "")
-        pagamento = context.parameters.get("pagamento", "")
         tipo = context.parameters.get("tipo", "")
         
         # Debug opcional: use 'cidades' (lista) em vez de 'cidade' fora do loop
@@ -57,7 +89,7 @@ class GetMentalHealthServices(Tool):
                     estado=estado,
                     cidade=cidade,
                     formato=formato,
-                    pagamento=pagamento,
+                    pagamento="",
                     tipo=tipo
                 )
 
@@ -70,10 +102,10 @@ class GetMentalHealthServices(Tool):
                     raw_results.append({"cidade": cidade, "response": response})
 
             if all_locations:
-                return TextResponse(data={"status": "success", "locations": all_locations})
+                return TextResponse(data={"status": "success", "action": "com a lista de servicos de saude mental, utilize a tool calcular_distancias_carro para calcular a distancia e tempo de viagem entre a localizacao do usuario e os servicos de saude mental passando a lista de servicos de saude mental no formato: [{name=<servico1> Nome do estabelecimento, lat=xxxxxxx, lng=xxxxxxx}", "locations": all_locations})
             if raw_results:
-                return TextResponse(data={"status": "multi", "results": raw_results})
-            return TextResponse(data={"status": "false", "locations": [], "message": "Nenhum serviço encontrado"})                    
+                return TextResponse(data={"status": "multi", "results": raw_results, "message": "Vamos utilizar o agente de localização para buscar as cidades próximas e os serviços de saúde mental nessas cidades."})
+            return TextResponse(data={"status": "false", "locations": [], "message": "Vamos utilizar o agente de localização para buscar as cidades próximas e os serviços de saúde mental nessas cidades."})                    
             
         except Exception as e:
             return TextResponse(data={
@@ -100,7 +132,7 @@ class GetMentalHealthServices(Tool):
         estado: str,
         cidade: str,
         formato: Optional[str] = None,
-        pagamento: Optional[str] = None,
+        pagamento: Optional[str] = "",
         tipo: Optional[str] = None,
         
     ) -> Dict[str, Any]:
@@ -112,7 +144,7 @@ class GetMentalHealthServices(Tool):
         if formato:
             params['formato'] = str(formato).lower()
         if pagamento:
-            params['pagamento'] = str(pagamento).lower()
+            params['pagamento'] = ""
         if tipo:
             try:
                 # Processa lista separada por vírgula mantendo o formato original
@@ -167,16 +199,29 @@ class GetMentalHealthServices(Tool):
                             'cidade': cidade,
                             'estado': estado,
                             'endereco': location.get('endereco', ''),
-                            'tipo': tipo,
-                            'pagamento': pagamento,
-                            'formato': formato
+                            'tipo': location.get('tipo', ''),
+                            'pagamento': location.get('pagamento', ''),
+                            'formato': location.get('formato', ''),
+                            'telefone1': location.get('telefone1', ''),
+                            'telefone2': location.get('telefone2', ''),
+                            'whatsapp': location.get('whatsapp', ''),
+                            'site': location.get('site', ''),
+                            'instagram': location.get('instagram', ''),
+                            'facebook': location.get('facebook', ''),
+                            'email': location.get('email', ''),
+                            'youtube': location.get('youtube', ''),
+                            'sigla': location.get('sigla', ''),
+                            'numero': location.get('numero', ''),
+                            'complemento': location.get('complemento', ''),
+                            'bairro': location.get('bairro', '')
                         }
                         filtered_locations.append(filtered_location)
                     
                     return {
                         "status": "success",
+                        "action": "com a lista de servicos de saude mental, utilize o agente location analyzer e a tool calcular_distancias_carro para calcular a distancia e tempo de viagem entre a localizacao do usuario e os servicos de saude mental passando a lista de servicos de saude mental no formato: [{name=<servico1> Nome do estabelecimento, lat=xxxxxxx, lng=xxxxxxx}",
                         "locations": filtered_locations
-                    }
+                        }
                 else:
                     return api_response
             except ValueError:

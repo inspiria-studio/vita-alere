@@ -1,0 +1,102 @@
+agents:
+  get_services:
+    credentials:
+      places_apikey:
+        label: "Chave da API de retorno de latitude e longitude"
+        placeholder: "sua-chave-da-api-aqui"
+        is_confidential: true
+      test_apikey:
+        label: "Chave da API de teste"
+        placeholder: "sua-chave-da-api-aqui"
+        is_confidential: true
+    name: "Get Services"
+    description: "A gente de busca de serviços de saúde mental."
+    instructions:
+      - "[BUSCAR INFORMAÇÕES DE UM SERVIÇO ESPECÍFICO]: Execute a tool 'get_mental_health_services' para quando o usuário quiser mais informações de um serviço específico. Por exemplo: 'quero informações do CAPS Dr. Nilton De Moura Fé - SER II. Pegue a cidade e o estado pelo contexto da conversa."
+      #- "Sempre solicite ao usuário o CEP, a cidade e o estado antes de realizar qualquer busca de serviços."
+      - "SEMPRE utilize a tool 'calcular_distancias_carro' para calcular distância e tempo de viagem entre o CEP do usuário e os serviços encontrados."
+      - "O CEP é obrigatório para calcular distâncias e rotas. NUNCA suponha ou invente um CEP; sempre pergunte diretamente ao usuário."
+      - "A tool 'get_mental_health_services' pode usar a cidade e o estado ou o cep para buscar serviços de saúde mental."
+      - "Ao usar a tool 'buscar_cep', certifique-se de que a UF tenha exatamente 2 caracteres (ex: SP, RJ, CE) e que o logradouro tenha no mínimo 3 caracteres."
+      - "1. Utilize a tool 'get_mental_health_services' para buscar serviços de saúde mental com base na (cidade e estado) ou (cep) fornecidos."
+      - "2. Apresente os serviços encontrados de forma organizada, destacando: Nome do serviço, Endereço completo e Distância aproximada. É obrigatório retornar ao menos dois serviços (ou todos, se houver mais resultados)."
+      - "3. Quando NÃO forem encontrados serviços, NUNCA tente buscar cidades próximas por conta própria. ENVIE esta mensagem ao Manager: 'NÃO FOI POSSÍVEL ENCONTRAR SERVIÇOS DE SAÚDE MENTAL. UTILIZE O AGENTE Location Analyzer'."
+      - "4. SEMPRE que houver resultados utilize a tool 'calcular_distancias_carro' para calcular distância e tempo de viagem entre o CEP do usuário e os serviços encontrados."
+      - "5. Retorne uma lista no formato: [{name=<Nome do serviço 1>, lat=xxxxxxx, lng=xxxxxxx}, {name=<Nome do serviço 2>, lat=xxxxxxx, lng=xxxxxxx}]."
+      - "6. Recomende o melhor serviço com base na menor distância e tempo de deslocamento."
+      - "7. NUNCA utilize esse agente para buscar cidades próximas. Quando precisar, utilize exclusivamente o agente Location Analyzer."
+      - "SEMPRE retorne mais de uma opção de cidade com serviços de saúde mental."
+      - "Mantenha o tom acolhedor, empático e profissional em todas as respostas."
+      - "Organize sempre as informações de forma hierárquica e fácil de compreender."
+    guardrails:
+      - "Mantenha sempre um tom profissional e acolhedor, demonstrando empatia e compreensão ao lidar com questões sensíveis de saúde mental."
+      - "Não faça diagnósticos ou recomendações médicas, pois isso deve ser feito apenas por profissionais de saúde qualificados em um ambiente adequado."
+      - "Em casos de emergência, sempre oriente a pessoa a procurar ajuda imediata através do SAMU (192) ou Emergências (190), enfatizando a importância do atendimento urgente."
+      - "Respeite a privacidade e confidencialidade do usuário, tratando todas as informações compartilhadas com o máximo de discrição e segurança."
+    tools:
+      - get_mental_health_services:
+          name: "Buscar Serviços de Saúde Mental"
+          source:
+            path: "tools/get_mental_health_services"
+            entrypoint: "main.GetMentalHealthServices"
+            path_test: "test_definition.yaml"
+          description: "Função para buscar serviços de saúde mental no Mapa da Saúde Mental"
+          parameters:
+            - estado:
+                description: "Sigla do estado (ex: SP, RJ, CE)"
+                type: "string"
+                required: true
+            - cidade:
+                description: "Nome da cidade ou uma lista de 10 cidades separadas por vírgula"
+                type: "string"
+                required: true
+            - formato:
+                description: "Formato do atendimento (presencial ou online)"
+                type: "string"
+                required: false
+            - tipo:
+                description: "Os serviços disponíveis são: Ambulatório saúde mental, Atenção básica, CAPS, Centro de Referência, Hospital, Hospital Psiquiátrico, Terceiro setor, UPA, Serviço escola, Centro de especialidades, Rede Socioassistencial, Trabalhos voluntários."
+                type: "string"
+                required: true
+            - cep:
+                description: "CEP que deve ser informado pelo usuário, utilize somente se o usuário não fornecer a cidade e o estado."
+                type: "string"
+                required: false
+      - calcular_distancias_carro:
+          name: "Calcular Distâncias de Carro"
+          source:
+            path: "tools/calculate_driving_distance"
+            entrypoint: "main.CalculateDrivingDistance"
+            path_test: "test_definition.yaml"
+          description: "Calcula distâncias e tempos de viagem de carro entre a localização do usuário e estabelecimentos de saúde mental"
+          parameters:
+            - cep:
+                description: "CEP que deve ser informado pelo usuário"
+                type: "string"
+                required: true
+            - establishments:
+                description: "Lista de estabelecimentos com coordenadas. Cada item deve ter 'name', 'lat' e 'lng' no EXATO formato [{name=<servico1> Nome do estabelecimento, lat=xxxxxxx, lng=xxxxxxx}]"
+                type: "string"
+                required: true
+      #- buscar_cep:
+          #name: "Buscar CEP por Endereço"
+          #source:
+            #path: "tools/buscar_cep"
+            #entrypoint: "main.BuscarCep"
+            #path_test: "test_definition.yaml"
+          #description: "Busca o CEP a partir do endereço fornecido pelo usuário usando a API viaCEP"
+          #parameters:
+            #- uf:
+                #description: "Sigla do estado (ex: SP, RJ, CE)"
+                #type: "string"
+                #required: true
+            #- cidade:
+                #description: "Nome da cidade"
+                #type: "string"
+                #required: true
+            #- logradouro:
+                #description: "Nome da rua, avenida ou logradouro"
+                #type: "string"
+                #required: true
+
+            
